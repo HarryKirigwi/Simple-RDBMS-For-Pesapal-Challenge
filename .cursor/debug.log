@@ -1,0 +1,5 @@
+{"data":{"curTokenLit":"users","curTokenType":2,"peekTokenLit":".","peekTokenType":10},"hypothesisId":"A","location":"parser.go:350","message":"parseSelect parsing column","runId":"run1","sessionId":"debug-session","timestamp":1768379043381}
+{"data":{"curTokenLit":"orders","curTokenType":2,"peekTokenLit":".","peekTokenType":10},"hypothesisId":"A","location":"parser.go:350","message":"parseSelect parsing column","runId":"run1","sessionId":"debug-session","timestamp":1768379043382}
+{"data":{"curTokenLit":"FROM","curTokenType":8,"peekTokenLit":"users","peekTokenType":2},"hypothesisId":"B","location":"parser.go:400","message":"parseSelect after column parsing","runId":"run1","sessionId":"debug-session","timestamp":1768379043383}
+{"data":{"conditionType":"*parser.ColumnExpr"},"hypothesisId":"A","location":"join.go:258","message":"extractJoinColumns entry","runId":"run1","sessionId":"debug-session","timestamp":1768379043384}
+{"data":{"isBinaryExpr":false,"operator":""},"hypothesisId":"A","location":"join.go:264","message":"extractJoinColumns type check","runId":"run1","sessionId":"debug-session","timestamp":1768379043385}

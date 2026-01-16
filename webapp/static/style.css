@@ -6,9 +6,10 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background-color: #f5f5f5;
-    color: #333;
+    background-color: #1a365d;
+    color: #ffffff;
     line-height: 1.6;
+    min-height: 100vh;
 }
 
 .container {
@@ -19,118 +20,274 @@ body {
 
 h1 {
     margin-bottom: 20px;
-    color: #2c3e50;
+    color: #ffffff;
+    font-size: 2.5rem;
+    font-weight: 700;
 }
 
-table {
+.welcome-message {
+    font-size: 1.3rem;
+    margin-bottom: 30px;
+    color: #ffffff;
+    opacity: 0.9;
+}
+
+/* Product Grid */
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 25px;
+    margin-top: 30px;
+}
+
+/* Product Card */
+.product-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.product-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Product Image */
+.product-image {
     width: 100%;
-    border-collapse: collapse;
-    background: white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    margin-top: 20px;
+    height: 200px;
+    overflow: hidden;
+    background-color: #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-thead {
-    background-color: #3498db;
-    color: white;
+.product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
-th, td {
-    padding: 12px;
-    text-align: left;
-    border-bottom: 1px solid #ddd;
+/* Product Info */
+.product-info {
+    padding: 20px;
+    flex-grow: 1;
+    color: #333;
 }
 
-tbody tr:hover {
+.product-info h3 {
+    color: #1a365d;
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.product-info .price {
+    color: #ff6b35;
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.product-info .description {
+    color: #666;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin-bottom: 15px;
+}
+
+/* Product Actions */
+.product-actions {
+    padding: 15px 20px;
     background-color: #f8f9fa;
+    display: flex;
+    gap: 10px;
+    border-top: 1px solid #e0e0e0;
 }
 
+/* Buttons */
 .btn {
     display: inline-block;
-    padding: 10px 20px;
-    background-color: #3498db;
-    color: white;
+    padding: 12px 24px;
+    background-color: #ff6b35;
+    color: #ffffff;
     text-decoration: none;
-    border-radius: 4px;
+    border-radius: 6px;
     border: none;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    transition: background-color 0.3s ease, transform 0.2s ease;
     margin-right: 10px;
 }
 
 .btn:hover {
-    background-color: #2980b9;
+    background-color: #ff8c42;
+    transform: translateY(-2px);
 }
 
 .btn-secondary {
-    background-color: #95a5a6;
+    background-color: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
 .btn-secondary:hover {
-    background-color: #7f8c8d;
+    background-color: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
 }
 
-.btn-small {
+.btn-edit {
     display: inline-block;
-    padding: 5px 10px;
-    background-color: #27ae60;
-    color: white;
+    padding: 8px 16px;
+    background-color: #ff6b35;
+    color: #ffffff;
     text-decoration: none;
-    border-radius: 3px;
-    font-size: 12px;
-    margin-right: 5px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: background-color 0.3s ease;
+    flex: 1;
+    text-align: center;
 }
 
-.btn-small:hover {
-    background-color: #229954;
+.btn-edit:hover {
+    background-color: #ff8c42;
 }
 
-.btn-danger {
+.btn-delete {
+    display: inline-block;
+    padding: 8px 16px;
     background-color: #e74c3c;
+    color: #ffffff;
+    text-decoration: none;
+    border-radius: 6px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    flex: 1;
 }
 
-.btn-danger:hover {
+.btn-delete:hover {
     background-color: #c0392b;
 }
 
+/* Forms */
 form {
     display: inline;
 }
 
 .form-group {
-    margin-bottom: 15px;
+    margin-bottom: 20px;
 }
 
 label {
     display: block;
-    margin-bottom: 5px;
+    margin-bottom: 8px;
     font-weight: 600;
-    color: #2c3e50;
+    color: #ffffff;
+    font-size: 1rem;
 }
 
 input[type="text"],
 input[type="number"],
+input[type="url"],
 textarea {
     width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 14px;
+    padding: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    font-size: 16px;
     font-family: inherit;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    transition: border-color 0.3s ease, background-color 0.3s ease;
+}
+
+input[type="text"]::placeholder,
+input[type="number"]::placeholder,
+input[type="url"]::placeholder,
+textarea::placeholder {
+    color: rgba(255, 255, 255, 0.5);
 }
 
 textarea {
-    min-height: 100px;
+    min-height: 120px;
     resize: vertical;
 }
 
 input:focus,
 textarea:focus {
     outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+    border-color: #ff6b35;
+    background-color: rgba(255, 255, 255, 0.15);
 }
 
 button[type="submit"] {
     margin-top: 10px;
+}
+
+/* Empty State */
+.empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px 20px;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.empty-state p {
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+}
+
+.empty-state p:first-child {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-bottom: 15px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .product-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    h1 {
+        font-size: 2rem;
+    }
+
+    .welcome-message {
+        font-size: 1.1rem;
+    }
+
+    .container {
+        padding: 15px;
+    }
+}
+
+@media (max-width: 480px) {
+    h1 {
+        font-size: 1.75rem;
+    }
+
+    .product-card {
+        border-radius: 8px;
+    }
+
+    .product-info h3 {
+        font-size: 1.3rem;
+    }
+
+    .product-info .price {
+        font-size: 1.5rem;
+    }
 }

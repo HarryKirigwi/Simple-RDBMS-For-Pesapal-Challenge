@@ -140,6 +140,7 @@ func createHandler(w http.ResponseWriter, r *http.Request) {
 		name := r.FormValue("name")
 		priceStr := r.FormValue("price")
 		description := r.FormValue("description")
+		imageUrl := r.FormValue("image_url")
 
 		// Get next ID
 		sql := "SELECT MAX(id) FROM products;"
@@ -174,7 +175,7 @@ func createHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if !tableExists {
-			createSQL := "CREATE TABLE products (id INTEGER PRIMARY KEY, name VARCHAR(100), price FLOAT, description TEXT);"
+			createSQL := "CREATE TABLE products (id INTEGER PRIMARY KEY, name VARCHAR(100), price FLOAT, description TEXT, image_url TEXT);"
 			createParser := parser.NewParser(createSQL)
 			createStmt, err := createParser.ParseStatement()
 			if err == nil {
@@ -187,8 +188,12 @@ func createHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Insert new product
-		sql = fmt.Sprintf("INSERT INTO products VALUES (%d, '%s', %s, '%s');",
-			nextID, escapeSQL(name), priceStr, escapeSQL(description))
+		imageUrlValue := "NULL"
+		if imageUrl != "" {
+			imageUrlValue = "'" + escapeSQL(imageUrl) + "'"
+		}
+		sql = fmt.Sprintf("INSERT INTO products VALUES (%d, '%s', %s, '%s', %s);",
+			nextID, escapeSQL(name), priceStr, escapeSQL(description), imageUrlValue)
 		p = parser.NewParser(sql)
 		stmt, err = p.ParseStatement()
 		if err != nil {
@@ -259,9 +264,14 @@ func updateHandler(w http.ResponseWriter, r *http.Request) {
 	name := r.FormValue("name")
 	priceStr := r.FormValue("price")
 	description := r.FormValue("description")
+	imageUrl := r.FormValue("image_url")
 
-	sql := fmt.Sprintf("UPDATE products SET name = '%s', price = %s, description = '%s' WHERE id = %d;",
-		escapeSQL(name), priceStr, escapeSQL(description), id)
+	imageUrlValue := "NULL"
+	if imageUrl != "" {
+		imageUrlValue = "'" + escapeSQL(imageUrl) + "'"
+	}
+	sql := fmt.Sprintf("UPDATE products SET name = '%s', price = %s, description = '%s', image_url = %s WHERE id = %d;",
+		escapeSQL(name), priceStr, escapeSQL(description), imageUrlValue, id)
 	p := parser.NewParser(sql)
 	stmt, err := p.ParseStatement()
 	if err != nil {
@@ -309,7 +319,21 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func staticHandler(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "."+r.URL.Path)
+	// Serve static files from webapp/static directory
+	wd, err := os.Getwd()
+	var staticPath string
+	if err == nil {
+		// Check if we're in the project root (has go.mod)
+		if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
+			staticPath = filepath.Join(wd, "webapp", r.URL.Path)
+		} else {
+			// Fallback to relative path
+			staticPath = filepath.Join("webapp", r.URL.Path)
+		}
+	} else {
+		staticPath = filepath.Join("webapp", r.URL.Path)
+	}
+	http.ServeFile(w, r, staticPath)
 }
 
 func escapeSQL(s string) string {
@@ -320,52 +344,69 @@ func generateListHTML(result *query.Result) string {
 	html := `<!DOCTYPE html>
 <html>
 <head>
-    <title>Products - RDBMS Demo</title>
+    <title>Pesapal Products</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="container">
-        <h1>Products</h1>
+        <h1>Pesapal Products</h1>
+        <p class="welcome-message">Welcome to Pesapal products</p>
         <a href="/create" class="btn">Create New Product</a>
-        <table>
-            <thead>
-                <tr>`
-
-	for _, col := range result.Columns {
-		html += fmt.Sprintf("<th>%s</th>", col)
-	}
-	html += "<th>Actions</th>"
-
-	html += `</tr>
-            </thead>
-            <tbody>`
+        <div class="product-grid">`
 
 	if len(result.Rows) == 0 {
-		html += fmt.Sprintf(`<tr>
-                <td colspan="%d" style="text-align: center; padding: 2rem;">
-                    <p style="color: #666; font-size: 1.1rem;">No products found.</p>
-                    <p style="color: #999; margin-top: 0.5rem;">Click "Create New Product" to add your first product.</p>
-                </td>
-            </tr>`, len(result.Columns)+1)
+		html += `<div class="empty-state">
+            <p>No products found.</p>
+            <p>Click "Create New Product" to add your first product.</p>
+        </div>`
 	} else {
 		for _, row := range result.Rows {
-			html += "<tr>"
-			for _, val := range row.Values {
-				html += fmt.Sprintf("<td>%s</td>", val.String())
-			}
 			id := row.Values[0].String()
-			html += fmt.Sprintf(`<td>
-                <a href="/edit/%s" class="btn-small">Edit</a>
-                <form method="POST" action="/delete/%s" style="display:inline;">
-                    <button type="submit" class="btn-small btn-danger" onclick="return confirm('Are you sure?')">Delete</button>
-                </form>
-            </td>`, id, id)
-			html += "</tr>"
+			name := ""
+			price := ""
+			description := ""
+			imageUrl := ""
+
+			if len(row.Values) > 1 && !row.Values[1].IsNull {
+				name = row.Values[1].String()
+			}
+			if len(row.Values) > 2 && !row.Values[2].IsNull {
+				price = row.Values[2].String()
+			}
+			if len(row.Values) > 3 && !row.Values[3].IsNull {
+				description = row.Values[3].String()
+			}
+			if len(row.Values) > 4 && !row.Values[4].IsNull {
+				imageUrl = row.Values[4].String()
+			}
+
+			// Use placeholder if no image URL
+			imgSrc := imageUrl
+			if imgSrc == "" {
+				// Data URI for placeholder image (simple SVG)
+				imgSrc = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Crect fill='%23ddd' width='300' height='200'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='18' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
+			}
+
+			html += fmt.Sprintf(`<div class="product-card">
+                <div class="product-image">
+                    <img src="%s" alt="%s" onerror="this.src='data:image/svg+xml,%%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'300\\' height=\\'200\\'%%3E%%3Crect fill=\\'%%23ddd\\' width=\\'300\\' height=\\'200\\'/%%3E%%3Ctext fill=\\'%%23999\\' font-family=\\'sans-serif\\' font-size=\\'18\\' x=\\'50%%25\\' y=\\'50%%25\\' text-anchor=\\'middle\\' dy=\\'.3em\\'%%3ENo Image%%3C/text%%3E%%3C/svg%%3E'">
+                </div>
+                <div class="product-info">
+                    <h3>%s</h3>
+                    <p class="price">Ksh%s</p>
+                    <p class="description">%s</p>
+                </div>
+                <div class="product-actions">
+                    <a href="/edit/%s" class="btn-edit">Edit</a>
+                    <form method="POST" action="/delete/%s" style="display:inline;">
+                        <button type="submit" class="btn-delete" onclick="return confirm('Are you sure?')">Delete</button>
+                    </form>
+                </div>
+            </div>`, imgSrc, name, name, price, description, id, id)
 		}
 	}
 
-	html += `</tbody>
-        </table>
+	html += `</div>
     </div>
 </body>
 </html>`
@@ -376,7 +417,7 @@ func generateCreateFormHTML() string {
 	return `<!DOCTYPE html>
 <html>
 <head>
-    <title>Create Product - RDBMS Demo</title>
+    <title>Create Product - Pesapal Products</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -395,6 +436,10 @@ func generateCreateFormHTML() string {
                 <label>Description:</label>
                 <textarea name="description"></textarea>
             </div>
+            <div class="form-group">
+                <label>Image URL (optional):</label>
+                <input type="url" name="image_url" placeholder="https://example.com/image.jpg">
+            </div>
             <button type="submit" class="btn">Create</button>
             <a href="/" class="btn btn-secondary">Cancel</a>
         </form>
@@ -407,6 +452,7 @@ func generateEditFormHTML(id int, row *storage.Row) string {
 	name := ""
 	price := ""
 	description := ""
+	imageUrl := ""
 
 	if len(row.Values) > 1 && !row.Values[1].IsNull {
 		name = row.Values[1].String()
@@ -417,11 +463,14 @@ func generateEditFormHTML(id int, row *storage.Row) string {
 	if len(row.Values) > 3 && !row.Values[3].IsNull {
 		description = row.Values[3].String()
 	}
+	if len(row.Values) > 4 && !row.Values[4].IsNull {
+		imageUrl = row.Values[4].String()
+	}
 
 	return fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
-    <title>Edit Product - RDBMS Demo</title>
+    <title>Edit Product - Pesapal Products</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -440,10 +489,14 @@ func generateEditFormHTML(id int, row *storage.Row) string {
                 <label>Description:</label>
                 <textarea name="description">%s</textarea>
             </div>
+            <div class="form-group">
+                <label>Image URL (optional):</label>
+                <input type="url" name="image_url" value="%s" placeholder="https://example.com/image.jpg">
+            </div>
             <button type="submit" class="btn">Update</button>
             <a href="/" class="btn btn-secondary">Cancel</a>
         </form>
     </div>
 </body>
-</html>`, id, name, price, description)
+</html>`, id, name, price, description, imageUrl)
 }

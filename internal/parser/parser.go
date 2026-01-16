@@ -1,13 +1,10 @@
 package parser
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"rdbms/internal/types"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Parser parses SQL statements
@@ -410,28 +407,6 @@ func (p *Parser) parseSelect() (*SelectStmt, error) {
 	}
 	stmt.Columns = columns
 
-	// #region agent log
-	func() {
-		logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		defer logFile.Close()
-		logData, _ := json.Marshal(map[string]interface{}{
-			"sessionId":    "debug-session",
-			"runId":        "run1",
-			"hypothesisId": "B",
-			"location":     "parser.go:400",
-			"message":      "parseSelect after column parsing",
-			"data": map[string]interface{}{
-				"curTokenType":  p.curToken.Type,
-				"curTokenLit":    p.curToken.Literal,
-				"peekTokenType":  p.peekToken.Type,
-				"peekTokenLit":   p.peekToken.Literal,
-			},
-			"timestamp": time.Now().UnixMilli(),
-		})
-		logFile.Write(append(logData, '\n'))
-	}()
-	// #endregion
-
 	// After consuming * or columns, curToken should be FROM
 	// Check if we're already on FROM, otherwise advance to it
 	if !p.curTokenIs(TokenKeyword) || strings.ToUpper(p.curToken.Literal) != "FROM" {
@@ -582,127 +557,13 @@ func (p *Parser) parseUpdate() (*UpdateStmt, error) {
 	setClauses := []SetClause{}
 	firstIteration := true
 	for {
-		// #region agent log
-		func() {
-			logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			defer logFile.Close()
-			logData, _ := json.Marshal(map[string]interface{}{
-				"sessionId":    "debug-session",
-				"runId":        "run1",
-				"hypothesisId": "F",
-				"location":     "parser.go:583",
-				"message":      "parseUpdate loop start",
-				"data": map[string]interface{}{
-					"setClauseCount": len(setClauses),
-					"firstIteration": firstIteration,
-					"curTokenType":   p.curToken.Type,
-					"curTokenLit":     p.curToken.Literal,
-					"peekTokenType":   p.peekToken.Type,
-					"peekTokenLit":    p.peekToken.Literal,
-				},
-				"timestamp": time.Now().UnixMilli(),
-			})
-			logFile.Write(append(logData, '\n'))
-		}()
-		// #endregion
-		// Only advance on first iteration or after consuming comma
-		// After consuming comma, curToken is already on the next column name
+		// Only advance on first iteration - after consuming comma, curToken is already on next column
 		if firstIteration {
 			p.nextToken()
 			firstIteration = false
 		}
-		// #region agent log
-		func() {
-			logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			defer logFile.Close()
-			logData, _ := json.Marshal(map[string]interface{}{
-				"sessionId":    "debug-session",
-				"runId":        "run1",
-				"hypothesisId": "F",
-				"location":     "parser.go:584",
-				"message":      "parseUpdate after nextToken (column name)",
-				"data": map[string]interface{}{
-					"curTokenType":  p.curToken.Type,
-					"curTokenLit":   p.curToken.Literal,
-					"peekTokenType": p.peekToken.Type,
-					"peekTokenLit":  p.peekToken.Literal,
-				},
-				"timestamp": time.Now().UnixMilli(),
-			})
-			logFile.Write(append(logData, '\n'))
-		}()
-		// #endregion
-		// #region agent log
-		func() {
-			logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			defer logFile.Close()
-			logData, _ := json.Marshal(map[string]interface{}{
-				"sessionId":    "debug-session",
-				"runId":        "run1",
-				"hypothesisId": "F",
-				"location":     "parser.go:635",
-				"message":      "parseUpdate before creating clause",
-				"data": map[string]interface{}{
-					"curTokenType":  p.curToken.Type,
-					"curTokenLit":   p.curToken.Literal,
-					"peekTokenType": p.peekToken.Type,
-					"peekTokenLit":  p.peekToken.Literal,
-					"firstIteration": firstIteration,
-				},
-				"timestamp": time.Now().UnixMilli(),
-			})
-			logFile.Write(append(logData, '\n'))
-		}()
-		// #endregion
 		clause := SetClause{Column: p.curToken.Literal}
-		// #region agent log
-		func() {
-			logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			defer logFile.Close()
-			// Don't call expectPeek here - it advances the token!
-			// Just log the current state
-			logData, _ := json.Marshal(map[string]interface{}{
-				"sessionId":    "debug-session",
-				"runId":        "run1",
-				"hypothesisId": "F",
-				"location":     "parser.go:661",
-				"message":      "parseUpdate before checking for '=' operator",
-				"data": map[string]interface{}{
-					"curTokenType":  p.curToken.Type,
-					"curTokenLit":   p.curToken.Literal,
-					"peekTokenType": p.peekToken.Type,
-					"peekTokenLit":  p.peekToken.Literal,
-					"columnName":    clause.Column,
-				},
-				"timestamp": time.Now().UnixMilli(),
-			})
-			logFile.Write(append(logData, '\n'))
-		}()
-		// #endregion
 		if !p.expectPeek(TokenOperator) || p.curToken.Literal != "=" {
-			// #region agent log
-			func() {
-				logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				defer logFile.Close()
-				logData, _ := json.Marshal(map[string]interface{}{
-					"sessionId":    "debug-session",
-					"runId":        "run1",
-					"hypothesisId": "F",
-					"location":     "parser.go:682",
-					"message":      "parseUpdate ERROR: expected '=' in SET clause",
-					"data": map[string]interface{}{
-						"curTokenType":     p.curToken.Type,
-						"curTokenLit":      p.curToken.Literal,
-						"peekTokenType":    p.peekToken.Type,
-						"peekTokenLit":     p.peekToken.Literal,
-						"columnName":       clause.Column,
-						"expectPeekResult": p.expectPeek(TokenOperator),
-					},
-					"timestamp": time.Now().UnixMilli(),
-				})
-				logFile.Write(append(logData, '\n'))
-			}()
-			// #endregion
 			return nil, fmt.Errorf("expected '=' in SET clause")
 		}
 		p.nextToken()
@@ -713,112 +574,19 @@ func (p *Parser) parseUpdate() (*UpdateStmt, error) {
 		clause.Value = val
 		setClauses = append(setClauses, clause)
 
-		// #region agent log
-		func() {
-			logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			defer logFile.Close()
-			logData, _ := json.Marshal(map[string]interface{}{
-				"sessionId":    "debug-session",
-				"runId":        "run1",
-				"hypothesisId": "F",
-				"location":     "parser.go:672",
-				"message":      "parseUpdate after parsing value, checking for comma",
-				"data": map[string]interface{}{
-					"curTokenType":  p.curToken.Type,
-					"curTokenLit":   p.curToken.Literal,
-					"peekTokenType": p.peekToken.Type,
-					"peekTokenLit":  p.peekToken.Literal,
-					"isComma":       p.curTokenIs(TokenPunctuation) && p.curToken.Literal == ",",
-					"setClauseCount": len(setClauses),
-				},
-				"timestamp": time.Now().UnixMilli(),
-			})
-			logFile.Write(append(logData, '\n'))
-		}()
-		// #endregion
-
 		// parseValue() advances past the value, so curToken is now past the value
 		// Check if there's a comma (more SET clauses)
 		if p.curTokenIs(TokenPunctuation) && p.curToken.Literal == "," {
 			// There's a comma - consume it and continue to next SET clause
-			p.nextToken()
-			// #region agent log
-			func() {
-				logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				defer logFile.Close()
-				logData, _ := json.Marshal(map[string]interface{}{
-					"sessionId":    "debug-session",
-					"runId":        "run1",
-					"hypothesisId": "F",
-					"location":     "parser.go:676",
-					"message":      "parseUpdate after consuming comma",
-					"data": map[string]interface{}{
-						"curTokenType":  p.curToken.Type,
-						"curTokenLit":   p.curToken.Literal,
-						"peekTokenType": p.peekToken.Type,
-						"peekTokenLit":  p.peekToken.Literal,
-					},
-					"timestamp": time.Now().UnixMilli(),
-				})
-				logFile.Write(append(logData, '\n'))
-			}()
-			// #endregion
 			// After consuming comma, curToken is on next column name - don't advance on next iteration
+			p.nextToken()
 			firstIteration = false
 		} else {
 			// No comma - we're done with SET clauses
-			// curToken is now past the last value, peekToken should be WHERE
-			// #region agent log
-			func() {
-				logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				defer logFile.Close()
-				logData, _ := json.Marshal(map[string]interface{}{
-					"sessionId":    "debug-session",
-					"runId":        "run1",
-					"hypothesisId": "F",
-					"location":     "parser.go:690",
-					"message":      "parseUpdate no comma, breaking loop",
-					"data": map[string]interface{}{
-						"curTokenType":  p.curToken.Type,
-						"curTokenLit":   p.curToken.Literal,
-						"peekTokenType": p.peekToken.Type,
-						"peekTokenLit":  p.peekToken.Literal,
-					},
-					"timestamp": time.Now().UnixMilli(),
-				})
-				logFile.Write(append(logData, '\n'))
-			}()
-			// #endregion
 			break
 		}
 	}
 	stmt.Set = setClauses
-
-	// #region agent log
-	func() {
-		logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		defer logFile.Close()
-		hasWhereCur := p.curTokenIs(TokenKeyword) && strings.ToUpper(p.curToken.Literal) == "WHERE"
-		hasWherePeek := p.peekTokenIs(TokenKeyword) && strings.ToUpper(p.peekToken.Literal) == "WHERE"
-		logData, _ := json.Marshal(map[string]interface{}{
-			"sessionId":    "debug-session",
-			"runId":        "run1",
-			"hypothesisId": "C",
-			"location":     "parser.go:536",
-			"message":      "parseUpdate checking for WHERE",
-			"data": map[string]interface{}{
-				"curTokenType":  p.curToken.Type,
-				"curTokenLit":   p.curToken.Literal,
-				"peekTokenType": p.peekToken.Type,
-				"peekTokenLit":  p.peekToken.Literal,
-				"hasWhereCur":   hasWhereCur,
-				"hasWherePeek":  hasWherePeek,
-			},
-			"timestamp": time.Now().UnixMilli(),
-		})
-		logFile.Write(append(logData, '\n'))
-	}()
-	// #endregion
 
 	// Check curToken first (parseValue() advances past the value, so curToken might be on WHERE)
 	if p.curTokenIs(TokenKeyword) && strings.ToUpper(p.curToken.Literal) == "WHERE" {
@@ -836,24 +604,6 @@ func (p *Parser) parseUpdate() (*UpdateStmt, error) {
 			return nil, err
 		}
 		stmt.Where = expr
-		// #region agent log
-		func() {
-			logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			defer logFile.Close()
-			logData, _ := json.Marshal(map[string]interface{}{
-				"sessionId":    "debug-session",
-				"runId":        "run1",
-				"hypothesisId": "C",
-				"location":     "parser.go:550",
-				"message":      "parseUpdate WHERE parsed",
-				"data": map[string]interface{}{
-					"whereType": fmt.Sprintf("%T", expr),
-				},
-				"timestamp": time.Now().UnixMilli(),
-			})
-			logFile.Write(append(logData, '\n'))
-		}()
-		// #endregion
 	}
 
 	return stmt, nil

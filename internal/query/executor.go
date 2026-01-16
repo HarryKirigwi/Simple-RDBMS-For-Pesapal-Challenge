@@ -1,15 +1,12 @@
 package query
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"rdbms/internal/constraint"
 	"rdbms/internal/parser"
 	"rdbms/internal/storage"
 	"rdbms/internal/types"
 	"strings"
-	"time"
 )
 
 // Executor executes SQL statements
@@ -180,26 +177,6 @@ func (e *Executor) executeSelect(stmt *parser.SelectStmt) (*Result, error) {
 	if stmt.Where != nil {
 		filtered := []*storage.Row{}
 		for _, row := range rows {
-			// #region agent log
-			func() {
-				logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				defer logFile.Close()
-				whereResult := e.evaluateExpression(stmt.Where, row, stmt.From)
-				logData, _ := json.Marshal(map[string]interface{}{
-					"sessionId":    "debug-session",
-					"runId":        "run1",
-					"hypothesisId": "D",
-					"location":     "executor.go:161",
-					"message":      "SELECT WHERE filter evaluation",
-					"data": map[string]interface{}{
-						"result": whereResult,
-						"rowId":  func() interface{} { if len(row.Values) > 0 && row.Values[0] != nil { return row.Values[0].Data }; return nil }(),
-					},
-					"timestamp": time.Now().UnixMilli(),
-				})
-				logFile.Write(append(logData, '\n'))
-			}()
-			// #endregion
 			if e.evaluateExpression(stmt.Where, row, stmt.From) {
 				filtered = append(filtered, row)
 			}
@@ -520,59 +497,12 @@ func (e *Executor) executeUpdate(stmt *parser.UpdateStmt) (*Result, error) {
 
 	updatedCount, err := e.storage.Update(stmt.TableName,
 		func(row *storage.Row) bool {
-			// #region agent log
-			func() {
-				logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				defer logFile.Close()
-				whereResult := true
-				if stmt.Where != nil {
-					whereResult = e.evaluateExpression(stmt.Where, row, stmt.TableName)
-				}
-				logData, _ := json.Marshal(map[string]interface{}{
-					"sessionId":    "debug-session",
-					"runId":        "run1",
-					"hypothesisId": "C",
-					"location":     "executor.go:245",
-					"message":      "Update filter evaluation",
-					"data": map[string]interface{}{
-						"hasWhere": stmt.Where != nil,
-						"result":   whereResult,
-						"rowId":    func() interface{} { if len(row.Values) > 0 && row.Values[0] != nil { return row.Values[0].Data }; return nil }(),
-					},
-					"timestamp": time.Now().UnixMilli(),
-				})
-				logFile.Write(append(logData, '\n'))
-			}()
-			// #endregion
 			if stmt.Where != nil {
 				return e.evaluateExpression(stmt.Where, row, stmt.TableName)
 			}
 			return true
 		},
 		func(row *storage.Row) *storage.Row {
-			// #region agent log
-			func() {
-				logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				defer logFile.Close()
-				rowId := "unknown"
-				if len(row.Values) > 0 && row.Values[0] != nil {
-					rowId = fmt.Sprintf("%v", row.Values[0].Data)
-				}
-				logData, _ := json.Marshal(map[string]interface{}{
-					"sessionId":    "debug-session",
-					"runId":        "update",
-					"hypothesisId": "E",
-					"location":     "executor.go:552",
-					"message":      "Update function entry",
-					"data": map[string]interface{}{
-						"rowId":      rowId,
-						"setClauses": len(stmt.Set),
-					},
-					"timestamp": time.Now().UnixMilli(),
-				})
-				logFile.Write(append(logData, '\n'))
-			}()
-			// #endregion
 			newRow := &storage.Row{Values: make([]*types.Value, len(row.Values))}
 			// Deep copy values
 			for i, val := range row.Values {
@@ -588,34 +518,6 @@ func (e *Executor) executeUpdate(stmt *parser.UpdateStmt) (*Result, error) {
 			}
 
 			for _, setClause := range stmt.Set {
-				// #region agent log
-				func() {
-					logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-					defer logFile.Close()
-					setValue := "null"
-					if setClause.Value != nil && !setClause.Value.IsNull {
-						setValue = setClause.Value.String()
-					}
-					rowId := "unknown"
-					if len(row.Values) > 0 && row.Values[0] != nil {
-						rowId = fmt.Sprintf("%v", row.Values[0].Data)
-					}
-					logData, _ := json.Marshal(map[string]interface{}{
-						"sessionId":    "debug-session",
-						"runId":        "update",
-						"hypothesisId": "E",
-						"location":     "executor.go:577",
-						"message":      "Applying SET clause",
-						"data": map[string]interface{}{
-							"rowId":  rowId,
-							"column": setClause.Column,
-							"value":  setValue,
-						},
-						"timestamp": time.Now().UnixMilli(),
-					})
-					logFile.Write(append(logData, '\n'))
-				}()
-				// #endregion
 				for i, col := range schema.Columns {
 					if col.Name == setClause.Column {
 						if i < len(newRow.Values) {
@@ -641,22 +543,6 @@ func (e *Executor) executeUpdate(stmt *parser.UpdateStmt) (*Result, error) {
 			}
 
 			updated++
-			// #region agent log
-			if f, err2 := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
-				rowId := "unknown"
-				if len(newRow.Values) > 0 && newRow.Values[0] != nil {
-					rowId = fmt.Sprintf("%v", newRow.Values[0].Data)
-				}
-				updatedValues := make(map[string]string)
-				for i, col := range schema.Columns {
-					if i < len(newRow.Values) && newRow.Values[i] != nil {
-						updatedValues[col.Name] = newRow.Values[i].String()
-					}
-				}
-				json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "update", "hypothesisId": "E", "location": "executor.go:572", "message": "Update function exit", "data": map[string]interface{}{"rowId": rowId, "updatedValues": updatedValues}, "timestamp": time.Now().UnixMilli()})
-				f.Close()
-			}
-			// #endregion
 			return newRow
 		})
 
@@ -680,24 +566,6 @@ func (e *Executor) executeDelete(stmt *parser.DeleteStmt) (*Result, error) {
 }
 
 func (e *Executor) evaluateExpression(expr parser.Expression, row *storage.Row, tableName string) bool {
-	// #region agent log
-	func() {
-		logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		defer logFile.Close()
-		logData, _ := json.Marshal(map[string]interface{}{
-			"sessionId":    "debug-session",
-			"runId":        "run1",
-			"hypothesisId": "A",
-			"location":     "executor.go:341",
-			"message":      "evaluateExpression entry",
-			"data": map[string]interface{}{
-				"exprType": fmt.Sprintf("%T", expr),
-			},
-			"timestamp": time.Now().UnixMilli(),
-		})
-		logFile.Write(append(logData, '\n'))
-	}()
-	// #endregion
 	switch ex := expr.(type) {
 	case *parser.BinaryExpr:
 		return e.evaluateBinary(ex, row, tableName)
@@ -732,75 +600,14 @@ func (e *Executor) evaluateExpression(expr parser.Expression, row *storage.Row, 
 }
 
 func (e *Executor) evaluateBinary(expr *parser.BinaryExpr, row *storage.Row, tableName string) bool {
-	// #region agent log
-	func() {
-		logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		defer logFile.Close()
-		logData, _ := json.Marshal(map[string]interface{}{
-			"sessionId":    "debug-session",
-			"runId":        "run1",
-			"hypothesisId": "A",
-			"location":     "executor.go:328",
-			"message":      "evaluateBinary entry",
-			"data": map[string]interface{}{
-				"operator": expr.Operator,
-			},
-			"timestamp": time.Now().UnixMilli(),
-		})
-		logFile.Write(append(logData, '\n'))
-	}()
-	// #endregion
 	left := e.getExpressionValue(expr.Left, row, tableName)
 	right := e.getExpressionValue(expr.Right, row, tableName)
-
-	// #region agent log
-	func() {
-		logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		defer logFile.Close()
-		logData, _ := json.Marshal(map[string]interface{}{
-			"sessionId":    "debug-session",
-			"runId":        "run1",
-			"hypothesisId": "A",
-			"location":     "executor.go:333",
-			"message":      "evaluateBinary got values",
-			"data": map[string]interface{}{
-				"operator": expr.Operator,
-				"leftNil":  left == nil,
-				"rightNil": right == nil,
-				"leftData": func() interface{} { if left != nil { return left.Data }; return nil }(),
-				"rightData": func() interface{} { if right != nil { return right.Data }; return nil }(),
-			},
-			"timestamp": time.Now().UnixMilli(),
-		})
-		logFile.Write(append(logData, '\n'))
-	}()
-	// #endregion
 
 	if left == nil || right == nil {
 		return false
 	}
 
 	cmp, err := left.Compare(right)
-	// #region agent log
-	func() {
-		logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		defer logFile.Close()
-		logData, _ := json.Marshal(map[string]interface{}{
-			"sessionId":    "debug-session",
-			"runId":        "run1",
-			"hypothesisId": "A",
-			"location":     "executor.go:340",
-			"message":      "evaluateBinary comparison result",
-			"data": map[string]interface{}{
-				"operator": expr.Operator,
-				"cmp":      cmp,
-				"err":      err != nil,
-			},
-			"timestamp": time.Now().UnixMilli(),
-		})
-		logFile.Write(append(logData, '\n'))
-	}()
-	// #endregion
 	if err != nil {
 		return false
 	}
@@ -830,26 +637,6 @@ func (e *Executor) evaluateBinary(expr *parser.BinaryExpr, row *storage.Row, tab
 	default:
 		result = false
 	}
-	// #region agent log
-	func() {
-		logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		defer logFile.Close()
-		logData, _ := json.Marshal(map[string]interface{}{
-			"sessionId":    "debug-session",
-			"runId":        "run1",
-			"hypothesisId": "A",
-			"location":     "executor.go:365",
-			"message":      "evaluateBinary result",
-			"data": map[string]interface{}{
-				"operator": expr.Operator,
-				"cmp":      cmp,
-				"result":   result,
-			},
-			"timestamp": time.Now().UnixMilli(),
-		})
-		logFile.Write(append(logData, '\n'))
-	}()
-	// #endregion
 	return result
 }
 
@@ -887,25 +674,6 @@ func (e *Executor) evaluateIsNull(expr *parser.IsNullExpr, row *storage.Row, tab
 func (e *Executor) getExpressionValue(expr parser.Expression, row *storage.Row, tableName string) *types.Value {
 	switch ex := expr.(type) {
 	case *parser.LiteralExpr:
-		// #region agent log
-		func() {
-			logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			defer logFile.Close()
-			logData, _ := json.Marshal(map[string]interface{}{
-				"sessionId":    "debug-session",
-				"runId":        "run1",
-				"hypothesisId": "B",
-				"location":     "executor.go:483",
-				"message":      "getExpressionValue LiteralExpr",
-				"data": map[string]interface{}{
-					"value":  func() interface{} { if ex.Value != nil { return ex.Value.Data }; return nil }(),
-					"isNull": func() bool { if ex.Value != nil { return ex.Value.IsNull }; return true }(),
-				},
-				"timestamp": time.Now().UnixMilli(),
-			})
-			logFile.Write(append(logData, '\n'))
-		}()
-		// #endregion
 		return ex.Value
 	case *parser.ColumnExpr:
 		schema, err := e.storage.GetSchema(tableName)
@@ -915,27 +683,6 @@ func (e *Executor) getExpressionValue(expr parser.Expression, row *storage.Row, 
 		for i, col := range schema.Columns {
 			if col.Name == ex.Name {
 				if i < len(row.Values) {
-					// #region agent log
-					func() {
-						logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-						defer logFile.Close()
-						logData, _ := json.Marshal(map[string]interface{}{
-							"sessionId":    "debug-session",
-							"runId":        "run1",
-							"hypothesisId": "B",
-							"location":     "executor.go:498",
-							"message":      "getExpressionValue ColumnExpr found",
-							"data": map[string]interface{}{
-								"colName": col.Name,
-								"colIdx":  i,
-								"rowVal":  func() interface{} { if row.Values[i] != nil { return row.Values[i].Data }; return nil }(),
-								"isNull":  func() bool { if row.Values[i] != nil { return row.Values[i].IsNull }; return true }(),
-							},
-							"timestamp": time.Now().UnixMilli(),
-						})
-						logFile.Write(append(logData, '\n'))
-					}()
-					// #endregion
 					return row.Values[i]
 				}
 			}

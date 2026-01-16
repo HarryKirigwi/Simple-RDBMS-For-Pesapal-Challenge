@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -263,24 +262,6 @@ func updateHandler(w http.ResponseWriter, r *http.Request) {
 
 	sql := fmt.Sprintf("UPDATE products SET name = '%s', price = %s, description = '%s' WHERE id = %d;",
 		escapeSQL(name), priceStr, escapeSQL(description), id)
-	// #region agent log
-	func() {
-		logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		defer logFile.Close()
-		logData, _ := json.Marshal(map[string]interface{}{
-			"sessionId":    "debug-session",
-			"runId":        "run1",
-			"hypothesisId": "F",
-			"location":     "main.go:247",
-			"message":      "UPDATE SQL being parsed",
-			"data": map[string]interface{}{
-				"sql": sql,
-			},
-			"timestamp": time.Now().UnixMilli(),
-		})
-		logFile.Write(append(logData, '\n'))
-	}()
-	// #endregion
 	p := parser.NewParser(sql)
 	stmt, err := p.ParseStatement()
 	if err != nil {

@@ -1,14 +1,11 @@
 package query
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"rdbms/internal/parser"
 	"rdbms/internal/storage"
 	"rdbms/internal/types"
 	"strings"
-	"time"
 )
 
 // executeJoins executes all joins and returns the joined rows
@@ -259,44 +256,7 @@ func (e *Executor) fullJoin(leftRows []*storage.Row, rightRows []*storage.Row, l
 }
 
 func (e *Executor) extractJoinColumns(condition parser.Expression, leftSchema, rightSchema *storage.TableSchema) (string, string, error) {
-	// #region agent log
-	func() {
-		logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		defer logFile.Close()
-		logData, _ := json.Marshal(map[string]interface{}{
-			"sessionId":    "debug-session",
-			"runId":        "run1",
-			"hypothesisId": "A",
-			"location":     "join.go:258",
-			"message":      "extractJoinColumns entry",
-			"data": map[string]interface{}{
-				"conditionType": fmt.Sprintf("%T", condition),
-			},
-			"timestamp": time.Now().UnixMilli(),
-		})
-		logFile.Write(append(logData, '\n'))
-	}()
-	// #endregion
 	binaryExpr, ok := condition.(*parser.BinaryExpr)
-	// #region agent log
-	func() {
-		logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		defer logFile.Close()
-		logData, _ := json.Marshal(map[string]interface{}{
-			"sessionId":    "debug-session",
-			"runId":        "run1",
-			"hypothesisId": "A",
-			"location":     "join.go:264",
-			"message":      "extractJoinColumns type check",
-			"data": map[string]interface{}{
-				"isBinaryExpr": ok,
-				"operator":     func() string { if ok { return binaryExpr.Operator }; return "" }(),
-			},
-			"timestamp": time.Now().UnixMilli(),
-		})
-		logFile.Write(append(logData, '\n'))
-	}()
-	// #endregion
 	if !ok || binaryExpr.Operator != "=" {
 		return "", "", fmt.Errorf("join condition must be an equality comparison")
 	}

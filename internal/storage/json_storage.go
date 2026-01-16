@@ -36,27 +36,10 @@ func NewJSONStorage(baseDir string) (*JSONStorage, error) {
 	tables, err := js.schemaManager.ListSchemas()
 	if err == nil {
 		for _, tableName := range tables {
-			// #region agent log
-			if f, err2 := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
-				json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "init", "hypothesisId": "D", "location": "json_storage.go:38", "message": "Loading table during init", "data": map[string]interface{}{"tableName": tableName}, "timestamp": time.Now().UnixMilli()})
-				f.Close()
-			}
-			// #endregion
 			if err := js.loadTable(tableName); err != nil {
 				// Continue if table can't be loaded
 				continue
 			}
-			// #region agent log
-			if f, err2 := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
-				table := js.tables[tableName]
-				rowCount := 0
-				if table != nil {
-					rowCount = len(table.Rows)
-				}
-				json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "init", "hypothesisId": "D", "location": "json_storage.go:42", "message": "Table loaded during init", "data": map[string]interface{}{"tableName": tableName, "rowCount": rowCount}, "timestamp": time.Now().UnixMilli()})
-				f.Close()
-			}
-			// #endregion
 		}
 	}
 	
@@ -108,24 +91,12 @@ func (js *JSONStorage) loadTable(tableName string) error {
 		Schema: schema,
 		Rows:   rows,
 	}
-	// #region agent log
-	if f, err2 := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
-		json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "load", "hypothesisId": "D", "location": "json_storage.go:95", "message": "loadTable completed", "data": map[string]interface{}{"tableName": tableName, "rowsLoaded": len(rows)}, "timestamp": time.Now().UnixMilli()})
-		f.Close()
-	}
-	// #endregion
 	
 	return nil
 }
 
 // saveTable saves a table to JSON file
 func (js *JSONStorage) saveTable(tableName string) error {
-	// #region agent log
-	if f, err := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "save", "hypothesisId": "C", "location": "json_storage.go:99", "message": "saveTable entry", "data": map[string]interface{}{"tableName": tableName}, "timestamp": time.Now().UnixMilli()})
-		f.Close()
-	}
-	// #endregion
 	table, ok := js.tables[tableName]
 	if !ok {
 		return fmt.Errorf("table %s not found", tableName)
@@ -148,13 +119,6 @@ func (js *JSONStorage) saveTable(tableName string) error {
 		jsonRows[i] = jsonRow
 	}
 	
-	// #region agent log
-	if f, err := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "save", "hypothesisId": "C", "location": "json_storage.go:121", "message": "Before WriteFile", "data": map[string]interface{}{"tableName": tableName, "tableFile": tableFile, "rowCount": len(jsonRows)}, "timestamp": time.Now().UnixMilli()})
-		f.Close()
-	}
-	// #endregion
-	
 	data, err := json.MarshalIndent(jsonRows, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
@@ -168,12 +132,6 @@ func (js *JSONStorage) saveTable(tableName string) error {
 			file.Close()
 		}
 	}
-	// #region agent log
-	if f, err2 := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
-		json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "save", "hypothesisId": "C", "location": "json_storage.go:127", "message": "WriteFile result", "data": map[string]interface{}{"tableName": tableName, "tableFile": tableFile, "dataLen": len(data), "err": fmt.Sprintf("%v", err)}, "timestamp": time.Now().UnixMilli()})
-		f.Close()
-	}
-	// #endregion
 	return err
 }
 
@@ -247,20 +205,8 @@ func (js *JSONStorage) CreateTable(schema *TableSchema) error {
 
 // Insert inserts a row into a table
 func (js *JSONStorage) Insert(tableName string, row *Row) error {
-	// #region agent log
-	if f, err := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "insert", "hypothesisId": "A", "location": "json_storage.go:199", "message": "Insert entry", "data": map[string]interface{}{"tableName": tableName, "rowValues": len(row.Values), "tablesInMemory": len(js.tables)}, "timestamp": time.Now().UnixMilli()})
-		f.Close()
-	}
-	// #endregion
 	table, ok := js.tables[tableName]
 	if !ok {
-		// #region agent log
-		if f, err := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "insert", "hypothesisId": "B", "location": "json_storage.go:202", "message": "Table not in memory, loading", "data": map[string]interface{}{"tableName": tableName}, "timestamp": time.Now().UnixMilli()})
-			f.Close()
-		}
-		// #endregion
 		// Try to load table
 		if err := js.loadTable(tableName); err != nil {
 			return fmt.Errorf("table %s not found", tableName)
@@ -319,20 +265,8 @@ func (js *JSONStorage) Insert(tableName string, row *Row) error {
 		}
 	}
 	table.Rows = append(table.Rows, newRow)
-	// #region agent log
-	if f, err := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "insert", "hypothesisId": "C", "location": "json_storage.go:259", "message": "Row added to memory", "data": map[string]interface{}{"tableName": tableName, "totalRows": len(table.Rows)}, "timestamp": time.Now().UnixMilli()})
-		f.Close()
-	}
-	// #endregion
 	
 	err := js.saveTable(tableName)
-	// #region agent log
-	if f, err2 := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
-		json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "insert", "hypothesisId": "C", "location": "json_storage.go:261", "message": "saveTable result", "data": map[string]interface{}{"tableName": tableName, "err": fmt.Sprintf("%v", err)}, "timestamp": time.Now().UnixMilli()})
-		f.Close()
-	}
-	// #endregion
 	return err
 }
 

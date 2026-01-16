@@ -345,39 +345,49 @@ func (p *Parser) parseSelect() (*SelectStmt, error) {
 	if p.curTokenIs(TokenOperator) && p.curToken.Literal == "*" {
 		columns = append(columns, SelectColumn{IsStar: true})
 		p.nextToken()
-	} else {
+		} else {
 		for {
-			// #region agent log
-			func() {
-				logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				defer logFile.Close()
-				logData, _ := json.Marshal(map[string]interface{}{
-					"sessionId":    "debug-session",
-					"runId":        "run1",
-					"hypothesisId": "A",
-					"location":     "parser.go:350",
-					"message":      "parseSelect parsing column",
-					"data": map[string]interface{}{
-						"curTokenType":  p.curToken.Type,
-						"curTokenLit":    p.curToken.Literal,
-						"peekTokenType":  p.peekToken.Type,
-						"peekTokenLit":   p.peekToken.Literal,
-					},
-					"timestamp": time.Now().UnixMilli(),
-				})
-				logFile.Write(append(logData, '\n'))
-			}()
-			// #endregion
-			col := SelectColumn{Name: p.curToken.Literal}
+			col := SelectColumn{}
 			
-			// Handle qualified column names (table.column)
-			if p.peekTokenIs(TokenPunctuation) && p.peekToken.Literal == "." {
-				p.nextToken() // advance from table name to "."
-				p.nextToken() // advance from "." to column name
-				col.Name = col.Name + "." + p.curToken.Literal // form "table.column"
-				p.nextToken() // advance past column name
+			// Check if this is an aggregate function (MAX, MIN, COUNT, SUM, AVG)
+			funcName := strings.ToUpper(p.curToken.Literal)
+			if (funcName == "MAX" || funcName == "MIN" || funcName == "COUNT" || funcName == "SUM" || funcName == "AVG") &&
+				p.peekTokenIs(TokenPunctuation) && p.peekToken.Literal == "(" {
+				// Parse aggregate function
+				col.Function = funcName
+				p.nextToken() // consume function name
+				p.nextToken() // consume "("
+				
+				// Parse column argument
+				if p.curTokenIs(TokenOperator) && p.curToken.Literal == "*" {
+					// COUNT(*)
+					col.ArgColumn = "*"
+					p.nextToken() // consume "*"
+				} else if p.curTokenIs(TokenIdentifier) {
+					col.ArgColumn = p.curToken.Literal
+					p.nextToken() // consume column name
+				} else {
+					return nil, fmt.Errorf("expected column name or * in aggregate function")
+				}
+				
+				// Consume closing ")"
+				if !p.curTokenIs(TokenPunctuation) || p.curToken.Literal != ")" {
+					return nil, fmt.Errorf("expected ')' after aggregate function argument")
+				}
+				p.nextToken() // consume ")"
 			} else {
-				p.nextToken() // advance past simple column name
+				// Regular column
+				col.Name = p.curToken.Literal
+				
+				// Handle qualified column names (table.column)
+				if p.peekTokenIs(TokenPunctuation) && p.peekToken.Literal == "." {
+					p.nextToken() // advance from table name to "."
+					p.nextToken() // advance from "." to column name
+					col.Name = col.Name + "." + p.curToken.Literal // form "table.column"
+					p.nextToken() // advance past column name
+				} else {
+					p.nextToken() // advance past simple column name
+				}
 			}
 			
 			// Check for AS alias

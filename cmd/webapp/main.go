@@ -153,8 +153,16 @@ func createHandler(w http.ResponseWriter, r *http.Request) {
 		// Get next ID
 		sql := "SELECT MAX(id) FROM products;"
 		p := parser.NewParser(sql)
-		stmt, _ := p.ParseStatement()
-		result, _ := executor.Execute(stmt)
+		stmt, err := p.ParseStatement()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Parse error: %v", err), http.StatusInternalServerError)
+			return
+		}
+		result, err := executor.Execute(stmt)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Execution error: %v", err), http.StatusInternalServerError)
+			return
+		}
 		nextID := 1
 		if len(result.Rows) > 0 && len(result.Rows[0].Values) > 0 && !result.Rows[0].Values[0].IsNull {
 			if id, ok := result.Rows[0].Values[0].Data.(int64); ok {
@@ -166,7 +174,7 @@ func createHandler(w http.ResponseWriter, r *http.Request) {
 		sql = fmt.Sprintf("INSERT INTO products VALUES (%d, '%s', %s, '%s');",
 			nextID, escapeSQL(name), priceStr, escapeSQL(description))
 		p = parser.NewParser(sql)
-		stmt, err := p.ParseStatement()
+		stmt, err = p.ParseStatement()
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Parse error: %v", err), http.StatusInternalServerError)
 			return

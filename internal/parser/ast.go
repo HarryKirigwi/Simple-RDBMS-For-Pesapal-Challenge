@@ -53,6 +53,8 @@ type SelectColumn struct {
 	Name      string
 	Alias     string
 	IsStar    bool // SELECT *
+	Function  string // Aggregate function: MAX, MIN, COUNT, SUM, AVG
+	ArgColumn string // Column argument for aggregate function
 }
 
 // Join represents a JOIN clause

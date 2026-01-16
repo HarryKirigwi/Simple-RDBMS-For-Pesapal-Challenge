@@ -28,16 +28,34 @@ func NewExecutor(storage storage.StorageEngine) *Executor {
 
 // Execute executes a parsed statement
 func (e *Executor) Execute(stmt parser.Statement) (*Result, error) {
+	if stmt == nil {
+		return nil, fmt.Errorf("statement is nil")
+	}
 	switch s := stmt.(type) {
 	case *parser.CreateTableStmt:
+		if s == nil {
+			return nil, fmt.Errorf("CreateTableStmt is nil")
+		}
 		return e.executeCreateTable(s)
 	case *parser.InsertStmt:
+		if s == nil {
+			return nil, fmt.Errorf("InsertStmt is nil")
+		}
 		return e.executeInsert(s)
 	case *parser.SelectStmt:
+		if s == nil {
+			return nil, fmt.Errorf("SelectStmt is nil")
+		}
 		return e.executeSelect(s)
 	case *parser.UpdateStmt:
+		if s == nil {
+			return nil, fmt.Errorf("UpdateStmt is nil")
+		}
 		return e.executeUpdate(s)
 	case *parser.DeleteStmt:
+		if s == nil {
+			return nil, fmt.Errorf("DeleteStmt is nil")
+		}
 		return e.executeDelete(s)
 	default:
 		return nil, fmt.Errorf("unsupported statement type: %T", stmt)
@@ -216,18 +234,93 @@ func (e *Executor) executeSelect(stmt *parser.SelectStmt) (*Result, error) {
 		schemas[join.Table] = joinSchema
 	}
 
-	resultRows := []*storage.Row{}
-	for _, row := range rows {
-		resultRow := &storage.Row{Values: []*types.Value{}}
+	// Check if we have aggregate functions
+	hasAggregates := false
+	for _, col := range stmt.Columns {
+		if col.Function != "" {
+			hasAggregates = true
+			break
+		}
+	}
 
-		if len(stmt.Columns) == 1 && stmt.Columns[0].IsStar {
-			// SELECT *
-			resultRow.Values = append(resultRow.Values, row.Values...)
-		} else {
-			// SELECT specific columns
-			for _, col := range stmt.Columns {
-				var colIdx int
-				found := false
+	resultRows := []*storage.Row{}
+	
+	if hasAggregates {
+		// Handle aggregate functions - return single row with aggregate results
+		resultRow := &storage.Row{Values: []*types.Value{}}
+		
+		for _, col := range stmt.Columns {
+			if col.Function != "" {
+				// Compute aggregate
+				var aggValue *types.Value
+				var err error
+				
+				if col.Function == "COUNT" && col.ArgColumn == "*" {
+					// COUNT(*)
+					aggValue = &types.Value{Type: types.TypeInteger, Data: int64(len(rows)), IsNull: false}
+				} else {
+					// Find column index for aggregate argument
+					var colIdx int
+					found := false
+					
+					if strings.Contains(col.ArgColumn, ".") {
+						parts := strings.Split(col.ArgColumn, ".")
+						if len(parts) == 2 {
+							tableName, columnName := parts[0], parts[1]
+							if schema, ok := schemas[tableName]; ok {
+								for i, c := range schema.Columns {
+									if c.Name == columnName {
+										colIdx = i
+										found = true
+										break
+									}
+								}
+							}
+						}
+					} else {
+						// Search in FROM table first
+						fromSchema := schemas[stmt.From]
+						for i, c := range fromSchema.Columns {
+							if c.Name == col.ArgColumn {
+								colIdx = i
+								found = true
+								break
+							}
+						}
+					}
+					
+					if !found {
+						return nil, fmt.Errorf("column %s not found for aggregate function", col.ArgColumn)
+					}
+					
+					// Compute aggregate over all rows
+					aggValue, err = e.computeAggregate(col.Function, rows, colIdx)
+					if err != nil {
+						return nil, err
+					}
+				}
+				
+				resultRow.Values = append(resultRow.Values, aggValue)
+			} else {
+				// Non-aggregate column - not allowed with aggregates
+				return nil, fmt.Errorf("cannot mix aggregate and non-aggregate columns")
+			}
+		}
+		
+		resultRows = append(resultRows, resultRow)
+	} else {
+		// Regular column projection
+		for _, row := range rows {
+			resultRow := &storage.Row{Values: []*types.Value{}}
+
+			if len(stmt.Columns) == 1 && stmt.Columns[0].IsStar {
+				// SELECT *
+				resultRow.Values = append(resultRow.Values, row.Values...)
+			} else {
+				// SELECT specific columns
+				for _, col := range stmt.Columns {
+					var colIdx int
+					found := false
 				
 				// Handle qualified column names (table.column)
 				if strings.Contains(col.Name, ".") {
@@ -282,19 +375,20 @@ func (e *Executor) executeSelect(stmt *parser.SelectStmt) (*Result, error) {
 					}
 				}
 				
-				if found && colIdx < len(row.Values) {
-					resultRow.Values = append(resultRow.Values, row.Values[colIdx])
-				} else {
-					resultRow.Values = append(resultRow.Values, &types.Value{IsNull: true})
+					if found && colIdx < len(row.Values) {
+						resultRow.Values = append(resultRow.Values, row.Values[colIdx])
+					} else {
+						resultRow.Values = append(resultRow.Values, &types.Value{IsNull: true})
+					}
 				}
 			}
-		}
 
-		resultRows = append(resultRows, resultRow)
+			resultRows = append(resultRows, resultRow)
+		}
 	}
 
-	// Apply ORDER BY
-	if len(stmt.OrderBy) > 0 {
+	// Apply ORDER BY (skip for aggregate queries)
+	if len(stmt.OrderBy) > 0 && !hasAggregates {
 		// Simple sorting - in production, use more efficient algorithm
 		for i := 0; i < len(resultRows); i++ {
 			for j := i + 1; j < len(resultRows); j++ {
@@ -314,6 +408,106 @@ func (e *Executor) executeSelect(stmt *parser.SelectStmt) (*Result, error) {
 		Rows:    resultRows,
 		Columns: e.getColumnNames(stmt, fromSchema),
 	}, nil
+}
+
+// computeAggregate computes an aggregate function over rows
+func (e *Executor) computeAggregate(funcName string, rows []*storage.Row, colIdx int) (*types.Value, error) {
+	if len(rows) == 0 {
+		// Empty result set
+		if funcName == "COUNT" {
+			return &types.Value{Type: types.TypeInteger, Data: int64(0), IsNull: false}, nil
+		}
+		return &types.Value{IsNull: true}, nil
+	}
+
+	switch funcName {
+	case "MAX":
+		var maxVal *types.Value
+		for _, row := range rows {
+			if colIdx < len(row.Values) && row.Values[colIdx] != nil && !row.Values[colIdx].IsNull {
+				if maxVal == nil {
+					maxVal = row.Values[colIdx]
+				} else {
+					cmp, _ := row.Values[colIdx].Compare(maxVal)
+					if cmp > 0 {
+						maxVal = row.Values[colIdx]
+					}
+				}
+			}
+		}
+		if maxVal == nil {
+			return &types.Value{IsNull: true}, nil
+		}
+		return maxVal, nil
+	case "MIN":
+		var minVal *types.Value
+		for _, row := range rows {
+			if colIdx < len(row.Values) && row.Values[colIdx] != nil && !row.Values[colIdx].IsNull {
+				if minVal == nil {
+					minVal = row.Values[colIdx]
+				} else {
+					cmp, _ := row.Values[colIdx].Compare(minVal)
+					if cmp < 0 {
+						minVal = row.Values[colIdx]
+					}
+				}
+			}
+		}
+		if minVal == nil {
+			return &types.Value{IsNull: true}, nil
+		}
+		return minVal, nil
+	case "COUNT":
+		count := int64(0)
+		for _, row := range rows {
+			if colIdx < len(row.Values) && row.Values[colIdx] != nil && !row.Values[colIdx].IsNull {
+				count++
+			}
+		}
+		return &types.Value{Type: types.TypeInteger, Data: count, IsNull: false}, nil
+	case "SUM":
+		var sum float64
+		hasValue := false
+		for _, row := range rows {
+			if colIdx < len(row.Values) && row.Values[colIdx] != nil && !row.Values[colIdx].IsNull {
+				val := row.Values[colIdx]
+				switch v := val.Data.(type) {
+				case int64:
+					sum += float64(v)
+					hasValue = true
+				case float64:
+					sum += v
+					hasValue = true
+				}
+			}
+		}
+		if !hasValue {
+			return &types.Value{IsNull: true}, nil
+		}
+		return &types.Value{Type: types.TypeFloat, Data: sum, IsNull: false}, nil
+	case "AVG":
+		var sum float64
+		count := int64(0)
+		for _, row := range rows {
+			if colIdx < len(row.Values) && row.Values[colIdx] != nil && !row.Values[colIdx].IsNull {
+				val := row.Values[colIdx]
+				switch v := val.Data.(type) {
+				case int64:
+					sum += float64(v)
+					count++
+				case float64:
+					sum += v
+					count++
+				}
+			}
+		}
+		if count == 0 {
+			return &types.Value{IsNull: true}, nil
+		}
+		return &types.Value{Type: types.TypeFloat, Data: sum / float64(count), IsNull: false}, nil
+	default:
+		return nil, fmt.Errorf("unsupported aggregate function: %s", funcName)
+	}
 }
 
 func (e *Executor) executeUpdate(stmt *parser.UpdateStmt) (*Result, error) {
@@ -356,14 +550,54 @@ func (e *Executor) executeUpdate(stmt *parser.UpdateStmt) (*Result, error) {
 			return true
 		},
 		func(row *storage.Row) *storage.Row {
+			// #region agent log
+			if f, err2 := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
+				rowId := "unknown"
+				if len(row.Values) > 0 && row.Values[0] != nil {
+					rowId = fmt.Sprintf("%v", row.Values[0].Data)
+				}
+				json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "update", "hypothesisId": "E", "location": "executor.go:552", "message": "Update function entry", "data": map[string]interface{}{"rowId": rowId, "setClauses": len(stmt.Set)}, "timestamp": time.Now().UnixMilli()})
+				f.Close()
+			}
+			// #endregion
 			newRow := &storage.Row{Values: make([]*types.Value, len(row.Values))}
-			copy(newRow.Values, row.Values)
+			// Deep copy values
+			for i, val := range row.Values {
+				if val != nil {
+					newRow.Values[i] = &types.Value{
+						Type:   val.Type,
+						Data:   val.Data,
+						IsNull: val.IsNull,
+					}
+				} else {
+					newRow.Values[i] = &types.Value{Type: schema.Columns[i].Type, IsNull: true}
+				}
+			}
 
 			for _, setClause := range stmt.Set {
+				// #region agent log
+				if f, err2 := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
+					setValue := "null"
+					if setClause.Value != nil && !setClause.Value.IsNull {
+						setValue = setClause.Value.String()
+					}
+					json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "update", "hypothesisId": "E", "location": "executor.go:556", "message": "Applying SET clause", "data": map[string]interface{}{"column": setClause.Column, "value": setValue}, "timestamp": time.Now().UnixMilli()})
+					f.Close()
+				}
+				// #endregion
 				for i, col := range schema.Columns {
 					if col.Name == setClause.Column {
 						if i < len(newRow.Values) {
-							newRow.Values[i] = setClause.Value
+							// Create a new Value object to avoid sharing references
+							if setClause.Value != nil {
+								newRow.Values[i] = &types.Value{
+									Type:   setClause.Value.Type,
+									Data:   setClause.Value.Data,
+									IsNull: setClause.Value.IsNull,
+								}
+							} else {
+								newRow.Values[i] = &types.Value{Type: col.Type, IsNull: true}
+							}
 						}
 						break
 					}
@@ -376,6 +610,22 @@ func (e *Executor) executeUpdate(stmt *parser.UpdateStmt) (*Result, error) {
 			}
 
 			updated++
+			// #region agent log
+			if f, err2 := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
+				rowId := "unknown"
+				if len(newRow.Values) > 0 && newRow.Values[0] != nil {
+					rowId = fmt.Sprintf("%v", newRow.Values[0].Data)
+				}
+				updatedValues := make(map[string]string)
+				for i, col := range schema.Columns {
+					if i < len(newRow.Values) && newRow.Values[i] != nil {
+						updatedValues[col.Name] = newRow.Values[i].String()
+					}
+				}
+				json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "update", "hypothesisId": "E", "location": "executor.go:572", "message": "Update function exit", "data": map[string]interface{}{"rowId": rowId, "updatedValues": updatedValues}, "timestamp": time.Now().UnixMilli()})
+				f.Close()
+			}
+			// #endregion
 			return newRow
 		})
 
@@ -717,6 +967,13 @@ func (e *Executor) getColumnNames(stmt *parser.SelectStmt, schema *storage.Table
 	for i, col := range stmt.Columns {
 		if col.Alias != "" {
 			names[i] = col.Alias
+		} else if col.Function != "" {
+			// Aggregate function: format as "MAX(id)" or "MAX(id)" with alias
+			if col.ArgColumn == "*" {
+				names[i] = fmt.Sprintf("%s(*)", col.Function)
+			} else {
+				names[i] = fmt.Sprintf("%s(%s)", col.Function, col.ArgColumn)
+			}
 		} else {
 			names[i] = col.Name
 		}

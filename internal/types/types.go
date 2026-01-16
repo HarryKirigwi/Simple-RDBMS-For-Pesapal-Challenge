@@ -75,6 +75,11 @@ func NewValue(dataType DataType, data interface{}) (*Value, error) {
 			val.Data = int64(v)
 		case int64:
 			val.Data = v
+		case float64:
+			// JSON numbers are unmarshaled as float64, convert to int64
+			val.Data = int64(v)
+		case float32:
+			val.Data = int64(v)
 		case string:
 			i, err := strconv.ParseInt(v, 10, 64)
 			if err != nil {

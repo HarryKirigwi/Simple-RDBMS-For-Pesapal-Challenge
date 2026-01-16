@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/signal"
 	"rdbms/internal/parser"
 	"rdbms/internal/query"
 	"rdbms/internal/storage"
 	"strings"
+	"syscall"
 )
 
 func main() {
@@ -20,12 +22,32 @@ func main() {
 
 	executor := query.NewExecutor(storageEngine)
 
+	// Set up signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	// Flag to track if we should exit
+	shouldExit := false
+
+	// Goroutine to handle signals
+	go func() {
+		<-sigChan
+		fmt.Println("\nShutting down gracefully...")
+		shouldExit = true
+		// Close stdin to break the scanner loop
+		os.Stdin.Close()
+	}()
+
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Println("Simple RDBMS - Type SQL commands or .help for help")
 
 	var currentStmt strings.Builder
 
 	for {
+		if shouldExit {
+			break
+		}
+
 		if currentStmt.Len() == 0 {
 			fmt.Print("rdbms> ")
 		} else {
@@ -43,10 +65,13 @@ func main() {
 
 		// Handle meta-commands
 		if strings.HasPrefix(line, ".") {
-			if err := handleMetaCommand(line, storageEngine); err != nil {
+			if err := handleMetaCommand(line, storageEngine, &shouldExit); err != nil {
 				fmt.Printf("Error: %v\n", err)
 			}
 			currentStmt.Reset()
+			if shouldExit {
+				break
+			}
 			continue
 		}
 
@@ -106,7 +131,7 @@ func executeStatement(sql string, executor *query.Executor) error {
 	return nil
 }
 
-func handleMetaCommand(cmd string, storage storage.StorageEngine) error {
+func handleMetaCommand(cmd string, storage storage.StorageEngine, shouldExit *bool) error {
 	parts := strings.Fields(cmd)
 	if len(parts) == 0 {
 		return nil
@@ -159,7 +184,11 @@ func handleMetaCommand(cmd string, storage storage.StorageEngine) error {
 			}
 		}
 	case ".exit", ".quit":
-		os.Exit(0)
+		// Explicitly close storage before exiting
+		if err := storage.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error closing storage: %v\n", err)
+		}
+		*shouldExit = true
 	default:
 		return fmt.Errorf("unknown command: %s (type .help for help)", parts[0])
 	}

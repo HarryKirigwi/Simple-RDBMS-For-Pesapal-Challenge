@@ -1,0 +1,24 @@
+# Executable files
+*.exe
+*.exe~
+
+# Data directory (contains database files)
+data/
+
+# Cursor debug/log files
+.cursor/
+
+# Go build artifacts
+*.test
+*.out
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

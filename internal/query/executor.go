@@ -551,14 +551,27 @@ func (e *Executor) executeUpdate(stmt *parser.UpdateStmt) (*Result, error) {
 		},
 		func(row *storage.Row) *storage.Row {
 			// #region agent log
-			if f, err2 := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
+			func() {
+				logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				defer logFile.Close()
 				rowId := "unknown"
 				if len(row.Values) > 0 && row.Values[0] != nil {
 					rowId = fmt.Sprintf("%v", row.Values[0].Data)
 				}
-				json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "update", "hypothesisId": "E", "location": "executor.go:552", "message": "Update function entry", "data": map[string]interface{}{"rowId": rowId, "setClauses": len(stmt.Set)}, "timestamp": time.Now().UnixMilli()})
-				f.Close()
-			}
+				logData, _ := json.Marshal(map[string]interface{}{
+					"sessionId":    "debug-session",
+					"runId":        "update",
+					"hypothesisId": "E",
+					"location":     "executor.go:552",
+					"message":      "Update function entry",
+					"data": map[string]interface{}{
+						"rowId":      rowId,
+						"setClauses": len(stmt.Set),
+					},
+					"timestamp": time.Now().UnixMilli(),
+				})
+				logFile.Write(append(logData, '\n'))
+			}()
 			// #endregion
 			newRow := &storage.Row{Values: make([]*types.Value, len(row.Values))}
 			// Deep copy values
@@ -576,14 +589,32 @@ func (e *Executor) executeUpdate(stmt *parser.UpdateStmt) (*Result, error) {
 
 			for _, setClause := range stmt.Set {
 				// #region agent log
-				if f, err2 := os.OpenFile(".cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err2 == nil {
+				func() {
+					logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+					defer logFile.Close()
 					setValue := "null"
 					if setClause.Value != nil && !setClause.Value.IsNull {
 						setValue = setClause.Value.String()
 					}
-					json.NewEncoder(f).Encode(map[string]interface{}{"sessionId": "debug-session", "runId": "update", "hypothesisId": "E", "location": "executor.go:556", "message": "Applying SET clause", "data": map[string]interface{}{"column": setClause.Column, "value": setValue}, "timestamp": time.Now().UnixMilli()})
-					f.Close()
-				}
+					rowId := "unknown"
+					if len(row.Values) > 0 && row.Values[0] != nil {
+						rowId = fmt.Sprintf("%v", row.Values[0].Data)
+					}
+					logData, _ := json.Marshal(map[string]interface{}{
+						"sessionId":    "debug-session",
+						"runId":        "update",
+						"hypothesisId": "E",
+						"location":     "executor.go:577",
+						"message":      "Applying SET clause",
+						"data": map[string]interface{}{
+							"rowId":  rowId,
+							"column": setClause.Column,
+							"value":  setValue,
+						},
+						"timestamp": time.Now().UnixMilli(),
+					})
+					logFile.Write(append(logData, '\n'))
+				}()
 				// #endregion
 				for i, col := range schema.Columns {
 					if col.Name == setClause.Column {

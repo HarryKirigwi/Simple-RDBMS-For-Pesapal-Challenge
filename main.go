@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"rdbms/internal/parser"
 	"rdbms/internal/query"
 	"rdbms/internal/storage"
@@ -13,7 +14,23 @@ import (
 )
 
 func main() {
-	storageEngine, err := storage.NewJSONStorage("./data")
+	// Use consistent data directory path (same as webapp)
+	// Try to use absolute path from current working directory
+	wd, err := os.Getwd()
+	var dataDir string
+	if err == nil {
+		// Check if we're in the project root (has go.mod)
+		if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
+			dataDir = filepath.Join(wd, "data")
+		} else {
+			// Fallback to relative path
+			dataDir = "./data"
+		}
+	} else {
+		dataDir = "./data"
+	}
+
+	storageEngine, err := storage.NewJSONStorage(dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize storage: %v\n", err)
 		os.Exit(1)

@@ -338,13 +338,15 @@ func (js *JSONStorage) Insert(tableName string, row *Row) error {
 
 // Select selects rows from a table
 func (js *JSONStorage) Select(tableName string, filter func(*Row) bool) ([]*Row, error) {
+	// Always reload table from disk to get latest data (real-time updates)
+	// This ensures changes made by REPL or other processes are visible
+	if err := js.loadTable(tableName); err != nil {
+		return nil, fmt.Errorf("table %s not found: %w", tableName, err)
+	}
+	
 	table, ok := js.tables[tableName]
 	if !ok {
-		// Try to load table
-		if err := js.loadTable(tableName); err != nil {
-			return nil, fmt.Errorf("table %s not found", tableName)
-		}
-		table = js.tables[tableName]
+		return nil, fmt.Errorf("table %s not found", tableName)
 	}
 	
 	rows := []*Row{}
@@ -359,12 +361,14 @@ func (js *JSONStorage) Select(tableName string, filter func(*Row) bool) ([]*Row,
 
 // Update updates rows in a table
 func (js *JSONStorage) Update(tableName string, filter func(*Row) bool, update func(*Row) *Row) (int, error) {
+	// Always reload table from disk to get latest data (real-time updates)
+	if err := js.loadTable(tableName); err != nil {
+		return 0, fmt.Errorf("table %s not found: %w", tableName, err)
+	}
+	
 	table, ok := js.tables[tableName]
 	if !ok {
-		if err := js.loadTable(tableName); err != nil {
-			return 0, fmt.Errorf("table %s not found", tableName)
-		}
-		table = js.tables[tableName]
+		return 0, fmt.Errorf("table %s not found", tableName)
 	}
 	
 	updated := 0
@@ -389,12 +393,14 @@ func (js *JSONStorage) Update(tableName string, filter func(*Row) bool, update f
 
 // Delete deletes rows from a table
 func (js *JSONStorage) Delete(tableName string, filter func(*Row) bool) (int, error) {
+	// Always reload table from disk to get latest data (real-time updates)
+	if err := js.loadTable(tableName); err != nil {
+		return 0, fmt.Errorf("table %s not found: %w", tableName, err)
+	}
+	
 	table, ok := js.tables[tableName]
 	if !ok {
-		if err := js.loadTable(tableName); err != nil {
-			return 0, fmt.Errorf("table %s not found", tableName)
-		}
-		table = js.tables[tableName]
+		return 0, fmt.Errorf("table %s not found", tableName)
 	}
 	
 	deleted := 0

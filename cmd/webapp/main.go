@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"rdbms/internal/parser"
 	"rdbms/internal/query"
 	"rdbms/internal/storage"
@@ -21,7 +23,23 @@ var storageEngine storage.StorageEngine
 
 func main() {
 	var err error
-	storageEngine, err = storage.NewJSONStorage("./data")
+	// Use consistent data directory path (same as REPL)
+	// Try to use absolute path from current working directory
+	wd, err := os.Getwd()
+	var dataDir string
+	if err == nil {
+		// Check if we're in the project root (has go.mod)
+		if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
+			dataDir = filepath.Join(wd, "data")
+		} else {
+			// Fallback to relative path
+			dataDir = "./data"
+		}
+	} else {
+		dataDir = "./data"
+	}
+
+	storageEngine, err = storage.NewJSONStorage(dataDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize storage: %v", err)
 	}
@@ -29,8 +47,7 @@ func main() {
 
 	executor = query.NewExecutor(storageEngine)
 
-	// Initialize demo table if it doesn't exist
-	initDemoTable()
+	// No initialization - use existing data from shared storage
 
 	http.HandleFunc("/", listHandler)
 	http.HandleFunc("/create", createHandler)
@@ -77,40 +94,6 @@ func main() {
 	fmt.Println("Server stopped")
 }
 
-func initDemoTable() {
-	tables, _ := storageEngine.ListTables()
-	tableExists := false
-	for _, table := range tables {
-		if table == "products" {
-			tableExists = true
-			break
-		}
-	}
-
-	if !tableExists {
-		sql := "CREATE TABLE products (id INTEGER PRIMARY KEY, name VARCHAR(100), price FLOAT, description TEXT);"
-		p := parser.NewParser(sql)
-		stmt, err := p.ParseStatement()
-		if err == nil {
-			executor.Execute(stmt)
-		}
-
-		// Insert some sample data
-		sampleData := []string{
-			"INSERT INTO products VALUES (1, 'Laptop', 999.99, 'High-performance laptop');",
-			"INSERT INTO products VALUES (2, 'Mouse', 29.99, 'Wireless mouse');",
-			"INSERT INTO products VALUES (3, 'Keyboard', 79.99, 'Mechanical keyboard');",
-		}
-		for _, sql := range sampleData {
-			p := parser.NewParser(sql)
-			stmt, err := p.ParseStatement()
-			if err == nil {
-				executor.Execute(stmt)
-			}
-		}
-	}
-}
-
 func listHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -127,8 +110,17 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := executor.Execute(stmt)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Execution error: %v", err), http.StatusInternalServerError)
-		return
+		// If table doesn't exist, show empty list instead of error
+		if strings.Contains(err.Error(), "table products not found") {
+			// Create empty result
+			result = &query.Result{
+				Columns: []string{"id", "name", "price", "description"},
+				Rows:    []*storage.Row{},
+			}
+		} else {
+			http.Error(w, fmt.Sprintf("Execution error: %v", err), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	html := generateListHTML(result)
@@ -159,14 +151,39 @@ func createHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		result, err := executor.Execute(stmt)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Execution error: %v", err), http.StatusInternalServerError)
-			return
-		}
 		nextID := 1
-		if len(result.Rows) > 0 && len(result.Rows[0].Values) > 0 && !result.Rows[0].Values[0].IsNull {
+		if err != nil {
+			// If table doesn't exist, start with ID 1
+			if !strings.Contains(err.Error(), "table products not found") {
+				http.Error(w, fmt.Sprintf("Execution error: %v", err), http.StatusInternalServerError)
+				return
+			}
+		} else if len(result.Rows) > 0 && len(result.Rows[0].Values) > 0 && !result.Rows[0].Values[0].IsNull {
 			if id, ok := result.Rows[0].Values[0].Data.(int64); ok {
 				nextID = int(id) + 1
+			}
+		}
+
+		// Create table if it doesn't exist
+		tables, _ := storageEngine.ListTables()
+		tableExists := false
+		for _, table := range tables {
+			if table == "products" {
+				tableExists = true
+				break
+			}
+		}
+
+		if !tableExists {
+			createSQL := "CREATE TABLE products (id INTEGER PRIMARY KEY, name VARCHAR(100), price FLOAT, description TEXT);"
+			createParser := parser.NewParser(createSQL)
+			createStmt, err := createParser.ParseStatement()
+			if err == nil {
+				_, err = executor.Execute(createStmt)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("Failed to create table: %v", err), http.StatusInternalServerError)
+					return
+				}
 			}
 		}
 
@@ -246,6 +263,24 @@ func updateHandler(w http.ResponseWriter, r *http.Request) {
 
 	sql := fmt.Sprintf("UPDATE products SET name = '%s', price = %s, description = '%s' WHERE id = %d;",
 		escapeSQL(name), priceStr, escapeSQL(description), id)
+	// #region agent log
+	func() {
+		logFile, _ := os.OpenFile("c:\\Users\\Administrator\\Code\\RDBMS\\.cursor\\debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		defer logFile.Close()
+		logData, _ := json.Marshal(map[string]interface{}{
+			"sessionId":    "debug-session",
+			"runId":        "run1",
+			"hypothesisId": "F",
+			"location":     "main.go:247",
+			"message":      "UPDATE SQL being parsed",
+			"data": map[string]interface{}{
+				"sql": sql,
+			},
+			"timestamp": time.Now().UnixMilli(),
+		})
+		logFile.Write(append(logData, '\n'))
+	}()
+	// #endregion
 	p := parser.NewParser(sql)
 	stmt, err := p.ParseStatement()
 	if err != nil {
@@ -324,19 +359,28 @@ func generateListHTML(result *query.Result) string {
             </thead>
             <tbody>`
 
-	for _, row := range result.Rows {
-		html += "<tr>"
-		for _, val := range row.Values {
-			html += fmt.Sprintf("<td>%s</td>", val.String())
-		}
-		id := row.Values[0].String()
-		html += fmt.Sprintf(`<td>
+	if len(result.Rows) == 0 {
+		html += fmt.Sprintf(`<tr>
+                <td colspan="%d" style="text-align: center; padding: 2rem;">
+                    <p style="color: #666; font-size: 1.1rem;">No products found.</p>
+                    <p style="color: #999; margin-top: 0.5rem;">Click "Create New Product" to add your first product.</p>
+                </td>
+            </tr>`, len(result.Columns)+1)
+	} else {
+		for _, row := range result.Rows {
+			html += "<tr>"
+			for _, val := range row.Values {
+				html += fmt.Sprintf("<td>%s</td>", val.String())
+			}
+			id := row.Values[0].String()
+			html += fmt.Sprintf(`<td>
                 <a href="/edit/%s" class="btn-small">Edit</a>
                 <form method="POST" action="/delete/%s" style="display:inline;">
                     <button type="submit" class="btn-small btn-danger" onclick="return confirm('Are you sure?')">Delete</button>
                 </form>
             </td>`, id, id)
-		html += "</tr>"
+			html += "</tr>"
+		}
 	}
 
 	html += `</tbody>
